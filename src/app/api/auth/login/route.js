@@ -17,19 +17,17 @@ export async function POST(req) {
     const intentosLogs = db.collection("IntentosLogs");
 
     const now = new Date();
-    const tiempo = 15;
-    const maxIntentos = 5;
 
-    // en los documentos del email especificado buscamos los intentos mayor que ($gt)
-    // hace 15 minutos
-    const intentos = await intentosLogs.countDocuments({
-      email,
-      // cconvertir 15 min a milisegunos: 15 min * 60s *1000 miliseg
-      // porque date llora si no son milisegundos
-      timestamp: { $gt: new Date(now - tiempo * 60 * 1000) }
+    // obtener ip
+    const ip = req.headers.get("x-forwarded-for");
+
+    // ahora por ip
+    const attempts = await attemptsCollection.countDocuments({
+      ip,
+      createdAt: { $gt: new Date(now - windowMinutes * 60 * 1000) }
     });
 
-    if (intentos >= maxIntentos) {
+    if (attempts >= maxAttempts) {
       return NextResponse.json(
         { error: "Demasiados intentos. Intenta más tarde." },
         { status: 429 }
