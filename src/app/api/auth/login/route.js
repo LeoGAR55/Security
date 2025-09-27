@@ -14,18 +14,41 @@ export async function POST(req) {
     await client.connect();
     const db = client.db(dbName);
     const users = db.collection("SeguridadClass");
+    const intentosLogs = db.collection("IntentosLogs");
+
+    const now = new Date();
+    const tiempo = 15;
+    const maxIntentos = 5;
+
+    // en los documentos del email especificado buscamos los intentos mayor que ($gt)
+    // hace 15 minutos
+    const intentos = await intentosLogs.countDocuments({
+      email,
+      // cconvertir 15 min a milisegunos: 15 min * 60s *1000 miliseg
+      // porque date llora si no son milisegundos
+      timestamp: { $gt: new Date(now - tiempo * 60 * 1000) }
+    });
+
+    if (intentos >= maxIntentos) {
+      return NextResponse.json(
+        { error: "Demasiados intentos. Intenta más tarde." },
+        { status: 429 }
+      );
+    }
+  
 
     const user = await users.findOne({ email });
 
     if (!user) {
       return NextResponse.json(
-        { error: "Correo o contraseña incorrectos" },
+        { error: "Correo o contraseña incorrectos" }, // ambiguedad a proposito
         { status: 401 }
       );
     }
 
     const contraseniaValida = await bcrypt.compare(password, user.password);
     if (!contraseniaValida) {
+      await intentosLogs.insertOne({ email, timestamp: new Date() }); // guardar en la bd el intento fallido
       return NextResponse.json(
         { error: "Correo o contraseña incorrectos" },
         { status: 401 }
